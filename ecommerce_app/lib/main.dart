@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'core/di/injection_container.dart' as sl;
 import 'features/products/data/repositories/product_repository_impl.dart';
 import 'features/products/domain/repositories/product_repository.dart';
 import 'features/products/domain/usecases/add_product.dart';
@@ -14,11 +15,15 @@ import 'features/products/presentation/pages/home_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Initialize service locator
+  await sl.sl.init();
+  
   // Initialize dependencies
   final sharedPreferences = await SharedPreferences.getInstance();
   
   final ProductRepository repository = ProductRepositoryImpl(
     sharedPreferences: sharedPreferences,
+    remoteDataSource: sl.sl.get(),
   );
 
   // Initialize use cases

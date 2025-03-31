@@ -3,16 +3,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/repositories/product_repository.dart';
 import '../models/product_model.dart';
+import '../datasources/product_remote_data_source.dart';
 
 class ProductRepositoryImpl implements ProductRepository {
   final SharedPreferences sharedPreferences;
+  final ProductRemoteDataSource remoteDataSource;
   static const String _productsKey = 'products';
 
-  ProductRepositoryImpl({required this.sharedPreferences});
+  ProductRepositoryImpl({
+    required this.sharedPreferences,
+    required this.remoteDataSource,
+  });
 
   @override
   Future<List<Product>> getProducts() async {
     try {
+      // Try to get products from remote source first
+      final remoteProducts = await remoteDataSource.getProducts();
+      
+      // Cache the products locally
+      await _cacheProducts(remoteProducts);
+      
+      return remoteProducts;
+    } catch (e) {
+      // If remote fetch fails, try to get from local cache
       final productsJson = sharedPreferences.getStringList(_productsKey) ?? [];
       if (productsJson.isEmpty) return [];
 
@@ -33,15 +47,28 @@ class ProductRepositoryImpl implements ProductRepository {
       });
 
       return products;
-    } catch (e) {
-      return [];
     }
   }
 
   @override
   Future<Product> getProduct(int id) async {
-    final products = await getProducts();
-    return products.firstWhere((product) => product.id == id);
+    try {
+      // Try to get product from remote source first
+      final remoteProduct = await remoteDataSource.getProductById(id.toString());
+      return remoteProduct;
+    } catch (e) {
+      // If remote fetch fails, try to get from local cache
+      final products = await getProducts();
+      return products.firstWhere((product) => product.id == id);
+    }
+  }
+
+  Future<void> _cacheProducts(List<Product> products) async {
+    final productsJson = products.map((product) {
+      final model = product as ProductModel;
+      return jsonEncode(model.toJson());
+    }).toList();
+    await sharedPreferences.setStringList(_productsKey, productsJson);
   }
 
   @override

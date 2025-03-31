@@ -1,56 +1,158 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ecommerce_app/features/products/data/datasources/product_remote_data_source.dart';
 import 'package:ecommerce_app/features/products/data/models/product_model.dart';
 import 'package:ecommerce_app/features/products/data/repositories/product_repository_impl.dart';
 
-@GenerateMocks([SharedPreferences])
+@GenerateMocks([ProductRemoteDataSource, SharedPreferences])
 import 'product_repository_impl_test.mocks.dart';
 
 void main() {
   late ProductRepositoryImpl repository;
+  late MockProductRemoteDataSource mockRemoteDataSource;
   late MockSharedPreferences mockSharedPreferences;
 
   setUp(() {
+    mockRemoteDataSource = MockProductRemoteDataSource();
     mockSharedPreferences = MockSharedPreferences();
-    repository = ProductRepositoryImpl(sharedPreferences: mockSharedPreferences);
+    repository = ProductRepositoryImpl(
+      sharedPreferences: mockSharedPreferences,
+      remoteDataSource: mockRemoteDataSource,
+    );
   });
 
   group('getProducts', () {
-    test('should return cached products when available', () async {
-      final products = [
-        ProductModel(id: 1, name: 'Test 1', price: 10.0, description: 'Desc 1'),
-        ProductModel(id: 2, name: 'Test 2', price: 20.0, description: 'Desc 2'),
-      ];
-      final jsonList = products.map((p) => jsonEncode(p.toJson())).toList();
-      
-      when(mockSharedPreferences.getStringList('products'))
-          .thenReturn(jsonList);
+    final tProducts = [
+      ProductModel(
+        id: 1,
+        name: 'Test Product 1',
+        price: 10.0,
+        description: 'Test Description 1',
+      ),
+      ProductModel(
+        id: 2,
+        name: 'Test Product 2',
+        price: 20.0,
+        description: 'Test Description 2',
+      ),
+    ];
 
-      final result = await repository.getProducts();
+    final tProductsJson = tProducts.map((product) {
+      final model = product as ProductModel;
+      return jsonEncode(model.toJson());
+    }).toList();
 
-      expect(result.length, products.length);
-      final resultProduct1 = result.firstWhere((p) => p.id == 1);
-      final resultProduct2 = result.firstWhere((p) => p.id == 2);
-      expect(resultProduct1.name, products[0].name);
-      expect(resultProduct1.price, products[0].price);
-      expect(resultProduct1.description, products[0].description);
-      expect(resultProduct2.name, products[1].name);
-      expect(resultProduct2.price, products[1].price);
-      expect(resultProduct2.description, products[1].description);
-      verify(mockSharedPreferences.getStringList('products')).called(1);
-    });
+    test(
+      'should return remote data when remote data source is successful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getProducts())
+            .thenAnswer((_) async => tProducts);
+        when(mockSharedPreferences.setStringList(any, any))
+            .thenAnswer((_) async => true);
+        when(mockSharedPreferences.getStringList('products'))
+            .thenReturn([]);
 
-    test('should return empty list when no cached products', () async {
-      when(mockSharedPreferences.getStringList('products')).thenReturn([]);
+        // act
+        final result = await repository.getProducts();
 
-      final result = await repository.getProducts();
+        // assert
+        verify(mockRemoteDataSource.getProducts());
+        verify(mockSharedPreferences.setStringList('products', any));
+        expect(result, equals(tProducts));
+      },
+    );
 
-      expect(result, isEmpty);
-      verify(mockSharedPreferences.getStringList('products')).called(1);
-    });
+    test(
+      'should cache data locally when remote data source is successful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getProducts())
+            .thenAnswer((_) async => tProducts);
+        when(mockSharedPreferences.setStringList(any, any))
+            .thenAnswer((_) async => true);
+        when(mockSharedPreferences.getStringList('products'))
+            .thenReturn([]);
+
+        // act
+        await repository.getProducts();
+
+        // assert
+        verify(mockRemoteDataSource.getProducts());
+        verify(mockSharedPreferences.setStringList('products', any));
+      },
+    );
+
+    test(
+      'should return cached data when remote data source fails',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getProducts())
+            .thenThrow(Exception());
+        when(mockSharedPreferences.getStringList('products'))
+            .thenReturn(tProductsJson);
+
+        // act
+        final result = await repository.getProducts();
+
+        // assert
+        verify(mockRemoteDataSource.getProducts());
+        verify(mockSharedPreferences.getStringList('products'));
+        expect(result.length, equals(tProducts.length));
+        expect(result[0].id, equals(tProducts[0].id));
+        expect(result[0].name, equals(tProducts[0].name));
+      },
+    );
+  });
+
+  group('getProduct', () {
+    final tProduct = ProductModel(
+      id: 1,
+      name: 'Test Product',
+      price: 10.0,
+      description: 'Test Description',
+    );
+
+    test(
+      'should return remote product when remote data source is successful',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getProductById('1'))
+            .thenAnswer((_) async => tProduct);
+        when(mockSharedPreferences.getStringList('products'))
+            .thenReturn([]);
+
+        // act
+        final result = await repository.getProduct(1);
+
+        // assert
+        verify(mockRemoteDataSource.getProductById('1'));
+        expect(result, equals(tProduct));
+      },
+    );
+
+    test(
+      'should return cached product when remote data source fails',
+      () async {
+        // arrange
+        when(mockRemoteDataSource.getProductById('1'))
+            .thenThrow(Exception());
+        when(mockSharedPreferences.getStringList('products'))
+            .thenReturn([jsonEncode(tProduct.toJson())]);
+
+        // act
+        final result = await repository.getProduct(1);
+
+        // assert
+        verify(mockRemoteDataSource.getProductById('1'));
+        verify(mockSharedPreferences.getStringList('products'));
+        expect(result.id, equals(tProduct.id));
+        expect(result.name, equals(tProduct.name));
+      },
+    );
   });
 
   group('addProduct', () {
