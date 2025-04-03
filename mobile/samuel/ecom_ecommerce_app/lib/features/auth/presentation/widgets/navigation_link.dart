@@ -23,16 +23,18 @@ class NavigationLink extends StatelessWidget {
             fontFamily: 'Poppins',
             fontSize: 16,
             fontWeight: FontWeight.w500,
+            color: Color(0xFF888888),
           ),
         ),
         TextButton(
           onPressed: onPressed,
           child: Text(
             actionText,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 16,
               fontWeight: FontWeight.w600,
+              color: Theme.of(context).primaryColor,
             ),
           ),
         ),

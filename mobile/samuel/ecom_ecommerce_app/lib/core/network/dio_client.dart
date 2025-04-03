@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DioClient {
   final String baseUrl;
   late Dio _dio;
+  static const String _tokenKey = 'auth_token';
 
   DioClient({required this.baseUrl}) {
     _dio = Dio(
@@ -18,6 +20,17 @@ class DioClient {
         requestBody: true,
         responseHeader: true,
       ));
+
+    // Initialize auth token from storage
+    _initializeAuthToken();
+  }
+
+  Future<void> _initializeAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(_tokenKey);
+    if (token != null) {
+      addAuthToken(token);
+    }
   }
 
   Future<Response> get(
@@ -46,11 +59,15 @@ class DioClient {
     );
   }
 
-  void addAuthToken(String token) {
+  Future<void> addAuthToken(String token) async {
     _dio.options.headers['Authorization'] = 'Bearer $token';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
   }
 
-  void removeAuthToken() {
+  Future<void> removeAuthToken() async {
     _dio.options.headers.remove('Authorization');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
   }
 } 

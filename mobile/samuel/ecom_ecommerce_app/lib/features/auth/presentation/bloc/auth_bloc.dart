@@ -19,6 +19,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignUpEvent>(_onSignUp);
     on<SignOutEvent>(_onSignOut);
     on<CheckAuthStatusEvent>(_onCheckAuthStatus);
+
+    // Check auth status when the bloc is created
+    add(CheckAuthStatusEvent());
   }
 
   Future<void> _onSignIn(

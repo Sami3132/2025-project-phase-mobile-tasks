@@ -30,7 +30,7 @@ class AuthRemoteDataSource implements AuthRemoteDataSourceBase {
       final user = UserModel.fromJson(response.data);
       // Add token to future requests
       if (user.token != null) {
-        dioClient.addAuthToken(user.token!);
+        await dioClient.addAuthToken(user.token!);
       }
       return user;
     } on DioException catch (e) {
@@ -53,8 +53,15 @@ class AuthRemoteDataSource implements AuthRemoteDataSourceBase {
         },
       );
 
-      // After registration, we need to sign in to get the token
-      return await signIn(email, password);
+      final user = UserModel.fromJson(response.data);
+      // Add token to future requests if it's included in the response
+      if (user.token != null) {
+        await dioClient.addAuthToken(user.token!);
+      } else {
+        // If token is not included, sign in to get it
+        return await signIn(email, password);
+      }
+      return user;
     } on DioException catch (e) {
       if (e.response?.statusCode == 400) {
         throw Exception('Email already exists');
@@ -65,7 +72,7 @@ class AuthRemoteDataSource implements AuthRemoteDataSourceBase {
 
   @override
   Future<void> signOut() async {
-    dioClient.removeAuthToken();
+    await dioClient.removeAuthToken();
   }
 
   @override
